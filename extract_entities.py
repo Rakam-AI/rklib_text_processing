@@ -1,6 +1,7 @@
 '''
+
     dependence :
-        pip install PyPDF2 docx pdf2image pytesseract
+        pip install PyPDF2 pdf2image python-docx pytesseract
     usage : 
         python main.py .....l...
 
@@ -8,6 +9,13 @@
 
 # TODO : Ajouter des fichiers test
 # TODO : Add .txt , .md  , .docx files
+
+import os
+import json
+import PyPDF2
+import docx
+from pdf2image import convert_from_path
+import pytesseract
 
 def extract_paragraphs_from_pdf(file_path):
 
@@ -34,11 +42,11 @@ def extract_paragraphs_from_any(file_path):
     _, file_extension = os.path.splitext(file_path)
     
     if file_extension == ".pdf":
-        return extract_from_pdf(file_path)
+        return extract_paragraphs_from_pdf(file_path)
     elif file_extension == ".docx":
-        return extract_from_docx(file_path)
+        return extract_paragraphs_from_docx(file_path)
     elif file_extension in [".txt", ".md"]:
-        return extract_from_txt_md(file_path)
+        return extract_paragraphs_from_txt_md(file_path)
     else:
         print(f"File type {file_extension} not supported")
         return []
@@ -48,7 +56,7 @@ def extract_paragraphs_from_directory(directory):
     for subdir, _, files in os.walk(directory):
         for file in files:
             file_path = os.path.join(subdir, file)
-            paragraphs = extract_paragraphs(file_path)
+            paragraphs = extract_paragraphs_from_any(file_path)
             
             for p in paragraphs:
                 entry = {
@@ -60,5 +68,7 @@ def extract_paragraphs_from_directory(directory):
     return results
 
 if __name__ == '__main__':
+
+    paragraphs = extract_paragraphs_from_directory("./test_data")
 
     None
