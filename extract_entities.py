@@ -17,6 +17,18 @@ import docx
 from pdf2image import convert_from_path
 import pytesseract
 
+import magic
+
+def get_mime_type(file_path: str) -> str:
+    """
+        @description: Get the mime type of the file.
+    """
+    mime = magic.Magic()
+    mime_type = mime.from_file(file_path)
+    if mime_type == 'empty':
+        mime_type = 'application/octet-stream'
+    return mime_type
+
 def extract_paragraphs_from_pdf(file_path):
 
     with open(file_path, 'rb') as f:
@@ -38,7 +50,7 @@ def extract_paragraphs_from_txt_md(file_path):
     with open(file_path, 'r') as f:
         return f.read().split('\n\n')
 
-def extract_paragraphs_from_any(file_path):
+def extract_paragraphs_from_any(file_path: str, mimetype: str):
     _, file_extension = os.path.splitext(file_path)
     
     if file_extension == ".pdf":
@@ -56,7 +68,7 @@ def extract_paragraphs_from_directory(directory):
     for subdir, _, files in os.walk(directory):
         for file in files:
             file_path = os.path.join(subdir, file)
-            paragraphs = extract_paragraphs_from_any(file_path)
+            paragraphs = extract_paragraphs_from_any(file_path, get_mime_type(file_path))
             
             for p in paragraphs:
                 entry = {
@@ -70,5 +82,5 @@ def extract_paragraphs_from_directory(directory):
 if __name__ == '__main__':
 
     paragraphs = extract_paragraphs_from_directory("./test_data")
-
+    print (paragraphs)
     None
