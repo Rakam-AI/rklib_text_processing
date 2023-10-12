@@ -1,7 +1,10 @@
 '''
-
-    dependence :
-        pip install PyPDF2 pdf2image python-docx pytesseract
+    requirement: 
+        PyPDF2==3.0.1
+        pdf2image==1.16.3
+        python-docx==1.0.0
+        pytesseract==0.3.10
+        python-magic==0.4.27
     usage : 
         python main.py .....l...
 
