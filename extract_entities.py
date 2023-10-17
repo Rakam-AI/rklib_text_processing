@@ -32,28 +32,64 @@ def get_mime_type(file_path: str) -> str:
         mime_type = 'application/octet-stream'
     return mime_type
 
-def extract_paragraphs_from_pdf(file_path):
-
+def extract_paragraphs_from_pdf(file_path: str) -> list:
+    """
+    Extracts paragraphs from a PDF file and returns them as dictionary entries.
+    
+    Args:
+    - file_path (str): The path to the PDF file.
+    
+    Returns:
+    - List[dict]: List of dictionary entries for the paragraphs.
+    """
     with open(file_path, 'rb') as f:
         reader = PyPDF2.PdfReader(f)
-        text = [page.extract_text() for page in reader.pages]
-        
-        # If no text is found, it might be a scanned pdf
-        if not any(text):
-            images = convert_from_path(file_path)
-            text = [pytesseract.image_to_string(img) for img in images]
-            
-        return text
+        entries = []
 
-def extract_paragraphs_from_docx(file_path):
+        # Extract text from each page
+        for page_num, page in enumerate(reader.pages, start=1):
+            text = page.extract_text()
+
+            # If no text is found for the page, it might be a scanned pdf
+            if not text:
+                image = convert_from_path(file_path, first_page=page_num, last_page=page_num)[0]
+                text = pytesseract.image_to_string(image)
+
+            # Split text into paragraphs and create entries
+            paragraphs = [p for p in text.split("\n\n") if p.strip()]
+            entries.extend([{"file_mimetype": "application/pdf", "page_or_index": page_num, "paragraph": p} for p in paragraphs])
+
+        return entries
+
+def extract_paragraphs_from_docx(file_path: str) -> list:
+    """
+    Extracts paragraphs from a DOCX file and returns them as dictionary entries.
+    
+    Args:
+    - file_path (str): The path to the DOCX file.
+    
+    Returns:
+    - List[dict]: List of dictionary entries for the paragraphs.
+    """
     doc = docx.Document(file_path)
-    return [p.text for p in doc.paragraphs if p.text]
+    return [{"file_mimetype": "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "page_or_index": i, "paragraph": p.text} for i, p in enumerate(doc.paragraphs) if p.text]
 
-def extract_paragraphs_from_txt_md(file_path):
+def extract_paragraphs_from_txt_md(file_path: str, mimetype: str) -> list:
+    """
+    Extracts paragraphs from a TXT or MD file and returns them as dictionary entries.
+    
+    Args:
+    - file_path (str): The path to the TXT or MD file.
+    - mimetype (str): MIME type of the file.
+    
+    Returns:
+    - List[dict]: List of dictionary entries for the paragraphs.
+    """
     with open(file_path, 'r') as f:
-        return f.read().split('\n\n')
+        paragraphs = f.read().split('\n\n')
+        return [{"file_mimetype": mimetype, "page_or_index": i, "paragraph": p} for i, p in enumerate(paragraphs) if p.strip()]
 
-def extract_paragraphs_from_any(file_path: str, mimetype: str):
+def extract_paragraphs_from_any(file_path: str, mimetype: str) -> list:
     """
     Extract paragraphs from a file based on its MIME type.
     
@@ -78,28 +114,36 @@ def extract_paragraphs_from_any(file_path: str, mimetype: str):
     
     # Check if the MIME type corresponds to a plain text or markdown file.
     elif mimetype in ["text/plain", "text/markdown"]:
-        return extract_paragraphs_from_txt_md(file_path)
+        return extract_paragraphs_from_txt_md(file_path, mimetype)
     
     # If the MIME type doesn't match any of the supported types, raise an exception.
     else:
         raise ValueError(f"File type {mimetype} not supported")
 
-
-def extract_paragraphs_from_directory(directory):
+def extract_paragraphs_from_directory( directory: str ) -> list:
+    """
+    Extracts paragraphs from all supported files in a directory and returns them as dictionary entries.
+    
+    Args:
+    - directory (str): The path to the directory containing the files.
+    
+    Returns:
+    - List[dict]: List of dictionary entries for the paragraphs from all files.
+    """
     results = []
     for subdir, _, files in os.walk(directory):
         for file in files:
             file_path = os.path.join(subdir, file)
-            paragraphs = extract_paragraphs_from_any(file_path, get_mime_type(file_path))
+            mimetype = get_mime_type(file_path)
+
+            entries = extract_paragraphs_from_any(file_path, mimetype)
             
-            for p in paragraphs:
-                entry = {
-                    "file_name": file,
-                    "paragraph": p
-                }
+            for entry in entries:
+                entry["file_name"] = file  # Add the file name to each entry
                 results.append(entry)
     
     return results
+
 
 if __name__ == '__main__':
 
