@@ -54,17 +54,36 @@ def extract_paragraphs_from_txt_md(file_path):
         return f.read().split('\n\n')
 
 def extract_paragraphs_from_any(file_path: str, mimetype: str):
-    _, file_extension = os.path.splitext(file_path)
+    """
+    Extract paragraphs from a file based on its MIME type.
     
-    if file_extension == ".pdf":
+    Parameters:
+    - file_path (str): The path to the file from which to extract paragraphs.
+    - mimetype (str): The MIME type of the file.
+    
+    Returns:
+    - list: A list of extracted paragraphs.
+    
+    Raises:
+    - ValueError: If the provided MIME type isn't supported.
+    """
+    
+    # Check if the MIME type corresponds to a PDF file.
+    if mimetype == "application/pdf":
         return extract_paragraphs_from_pdf(file_path)
-    elif file_extension == ".docx":
+    
+    # Check if the MIME type corresponds to a DOCX (Word) file.
+    elif mimetype == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
         return extract_paragraphs_from_docx(file_path)
-    elif file_extension in [".txt", ".md"]:
+    
+    # Check if the MIME type corresponds to a plain text or markdown file.
+    elif mimetype in ["text/plain", "text/markdown"]:
         return extract_paragraphs_from_txt_md(file_path)
+    
+    # If the MIME type doesn't match any of the supported types, raise an exception.
     else:
-        print(f"File type {file_extension} not supported")
-        return []
+        raise ValueError(f"File type {mimetype} not supported")
+
 
 def extract_paragraphs_from_directory(directory):
     results = []
