@@ -14,13 +14,17 @@
 # TODO : Add .txt , .md  , .docx files
 
 import os
+import re
 import json
 import PyPDF2
 import docx
 from pdf2image import convert_from_path
-import pytesseract
+# import pytesseract
 
 import magic
+
+import easyocr
+import spacy
 
 def get_mime_type(file_path: str) -> str:
     """
@@ -31,6 +35,67 @@ def get_mime_type(file_path: str) -> str:
     if mime_type == 'empty':
         mime_type = 'application/octet-stream'
     return mime_type
+
+
+def clean_text_from_pdf( text: str ) -> str :
+
+    # Remove special characters
+    text = re.sub(r'[^a-zA-Z0-9.,!? \n]', ' ', text)
+    
+    # Replace line breaks with spaces
+    lines = text.split('\n')
+    cleaned_lines = []
+    
+    # Merge lines that are part of the same sentence
+    buffer = ''
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        buffer += ' ' + line
+        if line[-1] in ['.', '!', '?']:
+            cleaned_lines.append(buffer.strip())
+            buffer = ''
+    if buffer:
+        cleaned_lines.append(buffer.strip())
+    
+    # Join lines and remove unnecessary whitespace
+    cleaned_text = ' '.join(cleaned_lines)
+    cleaned_text = re.sub(r'\s+', ' ', cleaned_text).strip()
+    
+    return cleaned_text
+
+def merge_split_words_spacy( text, nlp ):
+    # Process the text with SpaCy
+    doc = nlp(text)
+
+    # Create a list to hold the processed tokens
+    new_tokens = []
+
+    # Iterate over the tokens
+    skip_next = False
+    for i, token in enumerate(doc):
+        # If we're skipping this token (because we merged it with the previous one), continue
+        if skip_next:
+            skip_next = False
+            continue
+
+        # If this token is not a known word, try merging it with the next token
+        if not token.is_alpha and i < len(doc) - 1:
+            merged_word = token.text + doc[i+1].text
+            merged_doc = nlp(merged_word)
+
+            # If the merged word is recognized, use it and skip the next token
+            if merged_doc[0].is_alpha:
+                new_tokens.append(merged_word)
+                skip_next = True
+            else:
+                new_tokens.append(token.text)
+        else:
+            new_tokens.append(token.text)
+
+    # Join the tokens back into a single string
+    return ' '.join(new_tokens)
 
 def extract_paragraphs_from_pdf(file_path: str) -> list:
     """
@@ -44,6 +109,10 @@ def extract_paragraphs_from_pdf(file_path: str) -> list:
     """
     with open(file_path, 'rb') as f:
         reader = PyPDF2.PdfReader(f)
+
+        reader_ocr = easyocr.Reader(['en'])
+        nlp = spacy.load("en_core_web_sm")
+
         entries = []
 
         # Extract text from each page
@@ -53,8 +122,12 @@ def extract_paragraphs_from_pdf(file_path: str) -> list:
             # If no text is found for the page, it might be a scanned pdf
             if not text:
                 image = convert_from_path(file_path, first_page=page_num, last_page=page_num)[0]
-                text = pytesseract.image_to_string(image)
+                text = ' '.join(reader_ocr.readtext(image, detail=0))
 
+            text = clean_text_from_pdf( text )
+            text = merge_split_words_spacy( text, nlp )
+            
+ 
             # Split text into paragraphs and create entries
             paragraphs = [p for p in text.split("\n\n") if p.strip()]
             entries.extend([{"file_mimetype": "application/pdf", "page_or_index": page_num, "paragraph": p} for p in paragraphs])
