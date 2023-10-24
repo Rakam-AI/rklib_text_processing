@@ -31,11 +31,26 @@ def get_mime_type(file_path: str) -> str:
         @description: Get the mime type of the file.
     """
     mime = magic.Magic()
-    mime_type = mime.from_file(file_path)
-    if mime_type == 'empty':
-        mime_type = 'application/octet-stream'
-    return mime_type
+    descriptive_mime_type = mime.from_file(file_path)
+    print(f"Descriptive mime type is {descriptive_mime_type} for file {file_path}")
+    return map_descriptive_to_mime(descriptive_mime_type)
 
+def map_descriptive_to_mime(descriptive_mime_type: str) -> str:
+    """
+        @description: Map descriptive mime types to standard mime types.
+    """
+    # Define a dictionary to map descriptive mime types to standard mime types
+    mime_mapping = {
+        'PDF document, version 1.4': 'application/pdf',
+        'PDF document, version 1.5': 'application/pdf',
+        'PDF document, version 1.6': 'application/pdf',
+        'PDF document, version 1.7': 'application/pdf',
+        'PDF document, version 1.8': 'application/pdf',
+        # ... add other mappings as needed
+        'Microsoft Word 2007+': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    }
+    # Get the standard mime type from the mapping, or default to 'application/octet-stream' if not found
+    return mime_mapping.get(descriptive_mime_type, 'application/octet-stream')
 
 def clean_text_from_pdf( text: str ) -> str :
 
@@ -97,6 +112,9 @@ def merge_split_words_spacy( text, nlp ):
     # Join the tokens back into a single string
     return ' '.join(new_tokens)
 
+def get_file_name_from_path(file_path: str) -> str :
+    return os.path.splitext(os.path.basename(file_path))[0]
+
 def extract_paragraphs_from_pdf(file_path: str) -> list:
     """
     Extracts paragraphs from a PDF file and returns them as dictionary entries.
@@ -130,7 +148,7 @@ def extract_paragraphs_from_pdf(file_path: str) -> list:
  
             # Split text into paragraphs and create entries
             paragraphs = [p for p in text.split("\n\n") if p.strip()]
-            entries.extend([{"file_mimetype": "application/pdf", "page_or_index": page_num, "paragraph": p} for p in paragraphs])
+            entries.extend([{"file_mimetype": "application/pdf", "page_or_index": page_num, "file_name": get_file_name_from_path(file_path), "paragraph": p} for p in paragraphs])
 
         return entries
 
@@ -145,7 +163,7 @@ def extract_paragraphs_from_docx(file_path: str) -> list:
     - List[dict]: List of dictionary entries for the paragraphs.
     """
     doc = docx.Document(file_path)
-    return [{"file_mimetype": "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "page_or_index": i, "paragraph": p.text} for i, p in enumerate(doc.paragraphs) if p.text]
+    return [{"file_mimetype": "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "page_or_index": i, "file_name": get_file_name_from_path(file_path), "paragraph": p.text} for i, p in enumerate(doc.paragraphs) if p.text]
 
 def extract_paragraphs_from_txt_md(file_path: str, mimetype: str) -> list:
     """
@@ -160,7 +178,7 @@ def extract_paragraphs_from_txt_md(file_path: str, mimetype: str) -> list:
     """
     with open(file_path, 'r') as f:
         paragraphs = f.read().split('\n\n')
-        return [{"file_mimetype": mimetype, "page_or_index": i, "paragraph": p} for i, p in enumerate(paragraphs) if p.strip()]
+        return [{"file_mimetype": mimetype, "page_or_index": i, "file_name": get_file_name_from_path(file_path), "paragraph": p} for i, p in enumerate(paragraphs) if p.strip()]
 
 def extract_paragraphs_from_any(file_path: str, mimetype: str) -> list:
     """
@@ -191,7 +209,7 @@ def extract_paragraphs_from_any(file_path: str, mimetype: str) -> list:
     
     # If the MIME type doesn't match any of the supported types, raise an exception.
     else:
-        raise ValueError(f"File type {mimetype} not supported")
+        raise ValueError(f"File type {mimetype} not supported for file {file_path}")
 
 def extract_paragraphs_from_directory( directory: str ) -> list:
     """
@@ -212,14 +230,20 @@ def extract_paragraphs_from_directory( directory: str ) -> list:
             entries = extract_paragraphs_from_any(file_path, mimetype)
             
             for entry in entries:
-                entry["file_name"] = file  # Add the file name to each entry
+                entry["file_path"] = file  # Add the file name to each entry
                 results.append(entry)
     
     return results
 
 
-if __name__ == '__main__':
+if __name__ == '__main__':  
+
+    paragraph_file = "/home/ubuntu/working-repositories/haliro/back/ia_workspace/tools/data/test.json"
 
     paragraphs = extract_paragraphs_from_directory("./test_data")
-    print (paragraphs)
-    None
+
+    # Saving the dictionary to a file in JSON format
+    with open(paragraph_file, 'w') as f:
+        json.dump(paragraphs, f, indent=4)
+
+    # print (paragraphs)
