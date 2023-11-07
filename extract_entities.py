@@ -19,6 +19,7 @@ import json
 import PyPDF2
 import docx
 from pdf2image import convert_from_path
+import numpy as np
 # import pytesseract
 
 import magic
@@ -52,33 +53,41 @@ def map_descriptive_to_mime(descriptive_mime_type: str) -> str:
     # Get the standard mime type from the mapping, or default to 'application/octet-stream' if not found
     return mime_mapping.get(descriptive_mime_type, 'application/octet-stream')
 
-def clean_text_from_pdf( text: str ) -> str :
 
-    # Remove special characters
-    text = re.sub(r'[^a-zA-Z0-9.,!? \n]', ' ', text)
+def clean_text_from_pdf(text: str) -> str:
+    """
+    Cleans the extracted text from a PDF by removing unwanted characters while preserving paragraph structure and accented characters.
     
-    # Replace line breaks with spaces
+    Args:
+    - text (str): The text extracted from a PDF.
+    
+    Returns:
+    - str: The cleaned text with preserved paragraph structure.
+    """
+    # Remove unwanted characters but preserve accented characters and common punctuation
+    text = re.sub(r'[^\w\s.,!?;:\'\”\“\(\)\-\n\u00C0-\u00FF]', '', text, flags=re.UNICODE)
+    
+    # Normalize space characters and remove any form of multiple whitespaces
+    text = re.sub(r'\s+', ' ', text, flags=re.UNICODE)
+    
+    # Replace multiple newlines with two newlines (considered as paragraph break)
+    # Assuming that a paragraph is separated by two or more newline characters
+    text = re.sub(r'(\n\s*){2,}', '\n\n', text, flags=re.UNICODE)
+    
+    # Remove extra spaces at the beginning and end of each line
     lines = text.split('\n')
-    cleaned_lines = []
+    cleaned_lines = [line.strip() for line in lines]
+
+    # Rejoin the cleaned lines with a single newline character
+    text = '\n'.join(cleaned_lines)
     
-    # Merge lines that are part of the same sentence
-    buffer = ''
-    for line in lines:
-        line = line.strip()
-        if not line:
-            continue
-        buffer += ' ' + line
-        if line[-1] in ['.', '!', '?']:
-            cleaned_lines.append(buffer.strip())
-            buffer = ''
-    if buffer:
-        cleaned_lines.append(buffer.strip())
+    # Replace single newlines within paragraphs with a space
+    text = text.replace('\n', ' ')
     
-    # Join lines and remove unnecessary whitespace
-    cleaned_text = ' '.join(cleaned_lines)
-    cleaned_text = re.sub(r'\s+', ' ', cleaned_text).strip()
+    # Reintroduce the double newline characters for paragraph breaks
+    text = text.replace(' \n\n ', '\n\n')
     
-    return cleaned_text
+    return text.strip()  # Remove any leading or trailing whitespace that may have been left over
 
 def merge_split_words_spacy( text, nlp ):
     # Process the text with SpaCy
@@ -139,7 +148,7 @@ def extract_paragraphs_from_pdf(file_path: str) -> list:
 
             # If no text is found for the page, it might be a scanned pdf
             if not text:
-                image = convert_from_path(file_path, first_page=page_num, last_page=page_num)[0]
+                image = np.array(convert_from_path(file_path, first_page=page_num, last_page=page_num)[0])
                 text = ' '.join(reader_ocr.readtext(image, detail=0))
 
             text = clean_text_from_pdf( text )
@@ -148,7 +157,7 @@ def extract_paragraphs_from_pdf(file_path: str) -> list:
  
             # Split text into paragraphs and create entries
             paragraphs = [p for p in text.split("\n\n") if p.strip()]
-            entries.extend([{"file_mimetype": "application/pdf", "page_or_index": page_num, "file_name": get_file_name_from_path(file_path), "paragraph": p} for p in paragraphs])
+            entries.extend([{"file_mimetype": "application/pdf", "page": page_num, "index": i, "file_name": get_file_name_from_path(file_path), "paragraph": p} for i, p in enumerate(paragraphs)])
 
         return entries
 
@@ -163,7 +172,7 @@ def extract_paragraphs_from_docx(file_path: str) -> list:
     - List[dict]: List of dictionary entries for the paragraphs.
     """
     doc = docx.Document(file_path)
-    return [{"file_mimetype": "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "page_or_index": i, "file_name": get_file_name_from_path(file_path), "paragraph": p.text} for i, p in enumerate(doc.paragraphs) if p.text]
+    return [{"file_mimetype": "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "page": 0, "index": i, "file_name": get_file_name_from_path(file_path), "paragraph": p.text} for i, p in enumerate(doc.paragraphs) if p.text]
 
 def extract_paragraphs_from_txt_md(file_path: str, mimetype: str) -> list:
     """
@@ -178,7 +187,7 @@ def extract_paragraphs_from_txt_md(file_path: str, mimetype: str) -> list:
     """
     with open(file_path, 'r') as f:
         paragraphs = f.read().split('\n\n')
-        return [{"file_mimetype": mimetype, "page_or_index": i, "file_name": get_file_name_from_path(file_path), "paragraph": p} for i, p in enumerate(paragraphs) if p.strip()]
+        return [{"file_mimetype": mimetype, "page": 0, "index": i, "file_name": get_file_name_from_path(file_path), "paragraph": p} for i, p in enumerate(paragraphs) if p.strip()]
 
 def extract_paragraphs_from_any(file_path: str, mimetype: str) -> list:
     """
@@ -227,20 +236,26 @@ def extract_paragraphs_from_directory( directory: str ) -> list:
             file_path = os.path.join(subdir, file)
             mimetype = get_mime_type(file_path)
 
-            entries = extract_paragraphs_from_any(file_path, mimetype)
-            
-            for entry in entries:
-                entry["file_path"] = file  # Add the file name to each entry
-                results.append(entry)
+            try :
+
+                entries = extract_paragraphs_from_any(file_path, mimetype)
+                
+                for entry in entries:
+                    results.append(entry)
+
+            except Exception as error: 
+                
+                print("An exception occurred:", error)
+                continue
     
     return results
 
 
 if __name__ == '__main__':  
 
-    paragraph_file = "/home/ubuntu/working-repositories/haliro/back/ia_workspace/tools/data/test.json"
+    paragraph_file = "/home/ubuntu/working-repositories/haliro/test_data/indexes/v01_paragraphs.json"
 
-    paragraphs = extract_paragraphs_from_directory("./test_data")
+    paragraphs = extract_paragraphs_from_directory("/home/ubuntu/working-repositories/haliro/test_data/test_docs/")
 
     # Saving the dictionary to a file in JSON format
     with open(paragraph_file, 'w') as f:
