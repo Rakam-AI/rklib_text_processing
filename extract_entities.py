@@ -46,6 +46,7 @@ def map_descriptive_to_mime(descriptive_mime_type: str) -> str:
         'PDF document, version 1.6': 'application/pdf',
         'PDF document, version 1.7': 'application/pdf',
         'PDF document, version 1.8': 'application/pdf',
+        'application/x-pdf' : 'application/pdf',
         # ... add other mappings as needed
         'Microsoft Word 2007+': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     }
