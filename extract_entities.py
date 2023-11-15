@@ -42,6 +42,8 @@ def map_descriptive_to_mime(descriptive_mime_type: str) -> str:
     """
     # Define a dictionary to map descriptive mime types to standard mime types
     mime_mapping = {
+        'PDF document, version 1.3': 'application/pdf',
+        'PDF document, version 1.3 (zip deflate encoded)': 'application/pdf',
         'PDF document, version 1.4': 'application/pdf',
         'PDF document, version 1.5': 'application/pdf',
         'PDF document, version 1.6': 'application/pdf',
